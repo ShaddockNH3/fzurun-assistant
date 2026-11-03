@@ -1,0 +1,133 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 850" width="1000" height="850" font-family="-apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" role="img" aria-label="fzurun-assistant 结构图：源文档派生知识库，双通道检索加门控，作答后从 HTTP 接口输出">
+  <defs>
+    <marker id="ar" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 Z" fill="#b6bcc2"/>
+    </marker>
+    <style>
+      .c   { fill:#ffffff; stroke:#e4e4e1; }
+      .h   { font-size:12px; fill:#6b7178; letter-spacing:.6px; }
+      .t   { font-size:14px; fill:#1f2328; }
+      .s   { font-size:12.5px; fill:#6b7178; }
+      .xs  { font-size:11.5px; fill:#8a8f98; }
+      .m   { font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+      .box { fill:#f7f8fa; stroke:#dfe3e8; }
+    </style>
+  </defs>
+
+  <rect width="1000" height="850" fill="#fbfbfa"/>
+
+  <text x="52" y="46" font-size="17" font-weight="600" fill="#1f2328">fzurun-assistant</text>
+  <text x="52" y="68" class="s">福州大学转专业问答　结构</text>
+  <text x="958" y="46" class="xs" text-anchor="end">一个源、一条链、三条退路</text>
+
+  <!-- 01 唯一源 -->
+  <rect x="52" y="100" width="670" height="86" rx="10" class="c"/>
+  <rect x="62" y="112" width="3" height="62" rx="1.5" fill="#8a8f98"/>
+  <text x="78" y="130" class="h">01　唯一源</text>
+  <text x="78" y="156" class="t m">index.md</text>
+  <text x="148" y="156" class="t">　88 条问答 · 3 万字</text>
+  <text x="78" y="176" class="s">人工核对过的政策原文，不是从教务处爬来的标题</text>
+
+  <line x1="387" y1="186" x2="387" y2="202" stroke="#b6bcc2" stroke-width="1.2" marker-end="url(#ar)"/>
+
+  <!-- 02 派生 -->
+  <rect x="52" y="206" width="670" height="112" rx="10" class="c"/>
+  <rect x="62" y="218" width="3" height="88" rx="1.5" fill="#6f8f6f"/>
+  <text x="78" y="236" class="h">02　派生　文档是唯一源，JSON 是生成物，不反向手改</text>
+  <rect x="78" y="252" width="150" height="34" rx="7" fill="#f4f6f8" stroke="#d9dee3"/>
+  <text x="100" y="274" font-size="12.5" fill="#3d4a55" class="m">kb/build.py</text>
+  <line x1="232" y1="269" x2="280" y2="269" stroke="#b6bcc2" stroke-width="1.2" marker-end="url(#ar)"/>
+  <rect x="288" y="252" width="352" height="34" rx="7" fill="#f4f6f8" stroke="#d9dee3"/>
+  <text x="308" y="274" font-size="12.5" fill="#3d4a55" class="m">data/kb/qa.json · 99 条</text>
+  <text x="78" y="306" class="s">qa 88 + reference 8 + section 3；锚点与站点 slug 一致；重跑只刷新正文，人工标注保留</text>
+
+  <line x1="387" y1="318" x2="387" y2="336" stroke="#b6bcc2" stroke-width="1.2" marker-end="url(#ar)"/>
+
+  <!-- 03 检索 -->
+  <rect x="52" y="340" width="670" height="238" rx="10" class="c"/>
+  <rect x="62" y="352" width="3" height="214" rx="1.5" fill="#4a7fa8"/>
+  <text x="78" y="362" class="h">03　检索　两路并行，融合后过门控</text>
+
+  <rect x="78" y="382" width="296" height="60" rx="8" class="box"/>
+  <text x="96" y="404" class="t">BM25 通道</text>
+  <text x="96" y="424" class="s">中文二元组 · 虚词表 · 问题字段重复 5 次</text>
+
+  <rect x="396" y="382" width="300" height="60" rx="8" class="box"/>
+  <text x="414" y="404" class="t">向量通道（可选）</text>
+  <text x="414" y="424" class="s">OpenAI 兼容 embeddings · npy 缓存</text>
+
+  <line x1="226" y1="442" x2="226" y2="458" stroke="#b6bcc2" stroke-width="1.2" marker-end="url(#ar)"/>
+  <line x1="546" y1="442" x2="546" y2="458" stroke="#b6bcc2" stroke-width="1.2" marker-end="url(#ar)"/>
+
+  <rect x="78" y="462" width="618" height="34" rx="7" fill="#eef3f8" stroke="#d3e0ec"/>
+  <text x="96" y="484" class="s">RRF 融合　只看名次，不管两路分数量纲</text>
+
+  <line x1="387" y1="496" x2="387" y2="510" stroke="#b6bcc2" stroke-width="1.2" marker-end="url(#ar)"/>
+
+  <rect x="78" y="514" width="186" height="34" rx="8" fill="#eefaf3" stroke="#bfe3ce"/>
+  <text x="96" y="536" font-size="12.5" fill="#24704a">strong　可作结论</text>
+  <rect x="282" y="514" width="186" height="34" rx="8" fill="#fdf6e8" stroke="#ead4a8"/>
+  <text x="300" y="536" font-size="12.5" fill="#8a6224">weak　只作参考</text>
+  <rect x="486" y="514" width="210" height="34" rx="8" fill="#fdeeee" stroke="#e8c4c4"/>
+  <text x="504" y="536" font-size="12.5" fill="#9c3b3b">irrelevant　拒答 + 导航</text>
+
+  <text x="78" y="568" class="xs">阈值：词表覆盖率 ≥ 0.55、idf 加权覆盖率 ≥ 0.5、首位差 ≥ 0.55（用融合前 BM25 分算）</text>
+
+  <line x1="387" y1="578" x2="387" y2="592" stroke="#b6bcc2" stroke-width="1.2" marker-end="url(#ar)"/>
+
+  <!-- 04 作答 -->
+  <rect x="52" y="596" width="670" height="112" rx="10" class="c"/>
+  <rect x="62" y="608" width="3" height="88" rx="1.5" fill="#a8794a"/>
+  <text x="78" y="626" class="h">04　作答　生成是可选项，不是必需项</text>
+  <text x="78" y="652" class="t">没配模型：原文直出 + 出处</text>
+  <text x="78" y="674" class="s">政策问题本来就该看原文，这不算降级</text>
+  <text x="396" y="652" class="t">配了模型：只挑段落、只摘原话</text>
+  <text x="396" y="674" class="s">输出后过数字校验，对不上就退回原文</text>
+
+  <line x1="387" y1="708" x2="387" y2="722" stroke="#b6bcc2" stroke-width="1.2" marker-end="url(#ar)"/>
+
+  <!-- 05 出口 -->
+  <rect x="52" y="726" width="670" height="96" rx="10" class="c"/>
+  <rect x="62" y="738" width="3" height="72" rx="1.5" fill="#7a6f9f"/>
+  <text x="78" y="756" class="h">05　出口　对外只有 HTTP，方便接 bot</text>
+  <text x="78" y="782" class="t m">POST /api/ask</text>
+  <text x="204" y="782" class="s">→ bot、前端、或者你随手 curl</text>
+  <text x="78" y="804" class="s m">GET /api/search · /health · /stats · /entries/{id}</text>
+
+  <!-- 右栏：退路 -->
+  <rect x="744" y="100" width="214" height="478" rx="10" class="c"/>
+  <text x="764" y="130" class="h">三条退路</text>
+
+  <text x="764" y="162" font-size="13" fill="#1f2328">1　没配模型</text>
+  <text x="764" y="182" class="s">直接返回原文和出处</text>
+  <text x="764" y="200" class="xs">这是默认形态，不是兜底</text>
+
+  <text x="764" y="238" font-size="13" fill="#1f2328">2　embedding 起不来</text>
+  <text x="764" y="258" class="s">启动时捕获，退纯 BM25</text>
+  <text x="764" y="276" class="xs">服务不能因为一个可选</text>
+  <text x="764" y="292" class="xs">通道挂掉就起不来</text>
+
+  <text x="764" y="330" font-size="13" fill="#1f2328">3　数字对不上</text>
+  <text x="764" y="350" class="s">整段退回原文</text>
+  <text x="764" y="368" class="xs">并写明为什么退</text>
+
+  <line x1="764" y1="414" x2="938" y2="414" stroke="#ecece9"/>
+  <text x="764" y="444" class="xs">原则只有一条：</text>
+  <text x="764" y="464" class="xs">任何一环失败，都退到</text>
+  <text x="764" y="484" class="xs">原文，不退到「猜」。</text>
+  <text x="764" y="516" class="xs">转专业政策的错误答案，</text>
+  <text x="764" y="536" class="xs">代价比答不出来高得多。</text>
+
+  <!-- 右栏：观测 -->
+  <rect x="744" y="598" width="214" height="224" rx="10" class="c"/>
+  <text x="764" y="626" class="h">一路观测</text>
+  <text x="764" y="652" class="s">每次问答落一行 JSONL</text>
+  <text x="764" y="670" class="xs m">query / gate / hits / 用时</text>
+  <text x="764" y="688" class="xs m">request_id 能让用户对号</text>
+  <line x1="764" y1="704" x2="938" y2="704" stroke="#ecece9"/>
+  <text x="764" y="728" class="s">用户点「没帮上」</text>
+  <text x="764" y="746" class="xs m">POST /api/feedback</text>
+  <line x1="764" y1="762" x2="938" y2="762" stroke="#ecece9"/>
+  <text x="764" y="786" class="s m">review.py</text>
+  <text x="764" y="804" class="xs">零命中清单、待补的同义问法</text>
+</svg>

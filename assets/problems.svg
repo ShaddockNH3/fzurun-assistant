@@ -1,0 +1,89 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 800" width="1000" height="800" font-family="-apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" role="img" aria-label="推进过程中的五个问题：看到的、为什么、改了什么">
+  <defs>
+    <style>
+      .row  { fill:#ffffff; stroke:#ededea; }
+      .colh { font-size:12px; fill:#8a8f98; letter-spacing:1px; }
+      .body { font-size:12px; fill:#3d434a; }
+      .tag  { font-size:11px; letter-spacing:.5px; }
+      .m    { font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    </style>
+  </defs>
+
+  <rect width="1000" height="800" fill="#fbfbfa"/>
+
+  <text x="52" y="46" font-size="17" font-weight="600" fill="#1f2328">推进过程中的问题，以及为什么这么解</text>
+  <text x="52" y="70" font-size="12.5" fill="#6b7178">没有一步是在加功能。每次都是先想清楚：这一步要是挂了，用户退到哪。</text>
+
+  <text x="64" y="108" class="colh">看到的现象</text>
+  <text x="366" y="108" class="colh">为什么</text>
+  <text x="668" y="108" class="colh">改了什么</text>
+
+  <!-- 行 1 -->
+  <rect x="40" y="122" width="920" height="106" rx="8" class="row"/>
+  <text x="64" y="148" class="tag" fill="#9c3b3b">语料</text>
+  <text x="64" y="170" class="body">通知库 4776 条，只有标题和链接</text>
+  <text x="64" y="187" class="body">问答库 586 条是 AI 编的，没人核过</text>
+  <text x="366" y="148" class="tag" fill="#8a8f98">脏数据不等于数据</text>
+  <text x="366" y="170" class="body">AI 编的条目相似度极高，会把</text>
+  <text x="366" y="187" class="body">权威段落挤出 top_k</text>
+  <text x="366" y="204" class="body">标题没有正文，答不了内容问题</text>
+  <text x="668" y="148" class="tag" fill="#8a8f98">整批丢弃</text>
+  <text x="668" y="170" class="body">改用人工核对过的 3 万字文档</text>
+  <text x="668" y="187" class="body">标题清单留作爬虫种子</text>
+
+  <!-- 行 2 -->
+  <rect x="40" y="242" width="920" height="106" rx="8" class="row"/>
+  <text x="64" y="268" class="tag" fill="#a8794a">结构</text>
+  <text x="64" y="290" class="body m">编号插到 Q0 / Q2.5 / Q7.6 / Q8.1</text>
+  <text x="64" y="307" class="body">4 张表在手机上要左右滑</text>
+  <text x="366" y="268" class="tag" fill="#8a8f98">往后硬塞的痕迹</text>
+  <text x="366" y="290" class="body">每加一次内容就补一个 .5，</text>
+  <text x="366" y="307" class="body">编号体系已经撑不住了</text>
+  <text x="366" y="324" class="body">表格交给模型转述数字，必错</text>
+  <text x="668" y="268" class="tag" fill="#8a8f98">重排</text>
+  <text x="668" y="290" class="body">四段式，编号降到两级</text>
+  <text x="668" y="307" class="body">表格改散文，44 张图一张没少</text>
+
+  <!-- 行 3 -->
+  <rect x="40" y="362" width="920" height="106" rx="8" class="row"/>
+  <text x="64" y="388" class="tag" fill="#4a7fa8">检索</text>
+  <text x="64" y="410" class="body">「今天天气怎么样」被判成 weak</text>
+  <text x="64" y="427" class="body">「降转是什么」命中「拟录取是啥」</text>
+  <text x="366" y="388" class="tag" fill="#8a8f98">两个独立的原因</text>
+  <text x="366" y="410" class="body">虚词占了覆盖率的分母</text>
+  <text x="366" y="427" class="body">RRF 之后相邻名次几乎同分，</text>
+  <text x="366" y="444" class="body">首位差这个判据直接失效</text>
+  <text x="668" y="388" class="tag" fill="#8a8f98">换判据</text>
+  <text x="668" y="410" class="body">加原始词表覆盖率 + 虚词表</text>
+  <text x="668" y="427" class="body">首位差改用融合前的原始分</text>
+
+  <!-- 行 4 -->
+  <rect x="40" y="482" width="920" height="106" rx="8" class="row"/>
+  <text x="64" y="508" class="tag" fill="#6f8f6f">工程</text>
+  <text x="64" y="530" class="body">接口返回全是 \uXXXX</text>
+  <text x="64" y="547" class="body m">uvicorn 不在依赖里，起不来</text>
+  <text x="64" y="564" class="body">dev 依赖被 sync 清掉</text>
+  <text x="366" y="508" class="tag" fill="#8a8f98">三个都是「默认值」的问题</text>
+  <text x="366" y="530" class="body">BlackSheep 默认转义非 ASCII</text>
+  <text x="366" y="547" class="body">optional 组本来就不会默认装</text>
+  <text x="668" y="508" class="tag" fill="#8a8f98">逐个替换默认值</text>
+  <text x="668" y="530" class="body m">json_settings.use 换序列化器</text>
+  <text x="668" y="547" class="body">dev 改用 PEP 735 dependency group</text>
+
+  <!-- 行 5 -->
+  <rect x="40" y="602" width="920" height="106" rx="8" class="row"/>
+  <text x="64" y="628" class="tag" fill="#7a6f9f">成本</text>
+  <text x="64" y="650" class="body">本机没 GPU，也不想先买 key</text>
+  <text x="64" y="667" class="body">不确定这东西有没有人要</text>
+  <text x="366" y="628" class="tag" fill="#8a8f98">生成不是必需环节</text>
+  <text x="366" y="650" class="body">转专业问题的答案本来就能</text>
+  <text x="366" y="667" class="body">从原文摘出来，模型只是排版</text>
+  <text x="668" y="628" class="tag" fill="#8a8f98">让生成变成可选项</text>
+  <text x="668" y="650" class="body">默认 retrieval_only</text>
+  <text x="668" y="667" class="body">配了模型才摘句 + 数字校验</text>
+
+  <!-- 结论 -->
+  <rect x="40" y="736" width="920" height="52" rx="8" fill="#f2f6f9" stroke="#d9e4ec"/>
+  <text x="64" y="768" font-size="13" fill="#2f5d7c">判断标准只有一条：这一步挂了，用户还能不能拿到可信的原文。</text>
+  <text x="632" y="768" font-size="12" fill="#5b7f99">所以所有退路都指向原文，不指向模型。</text>
+</svg>

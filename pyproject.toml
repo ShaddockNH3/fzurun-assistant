@@ -1,0 +1,31 @@
+[project]
+name = "fzurun-assistant"
+version = "0.1.0"
+description = "福州大学转专业知识问答助手（HTTP API + 简易前端）"
+readme = "README.md"
+requires-python = ">=3.12.3"
+dependencies = [
+    "blacksheep>=2.4",
+    "uvicorn[standard]>=0.32",
+    "pydantic-settings>=2.6",
+    "httpx>=0.27",
+    "numpy>=2.0",
+]
+
+[dependency-groups]
+dev = ["pytest>=8", "ruff>=0.8"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/fzurun"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]

@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>fzurun-assistant</title>
+<script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+<style>
+  :root { --fg:#1a1a1a; --muted:#6b7280; --line:#e5e7eb; --bg:#fff; --acc:#2563eb; --warn:#b45309; }
+  * { box-sizing: border-box; }
+  body { margin:0; font:15px/1.7 -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+         color:var(--fg); background:var(--bg); }
+  .wrap { max-width: 760px; margin: 0 auto; padding: 32px 20px 80px; }
+  h1 { font-size: 20px; font-weight: 500; margin: 0 0 4px; }
+  .sub { color: var(--muted); font-size: 13px; margin-bottom: 24px; }
+  .bar { display: flex; gap: 8px; }
+  input[type=text] { flex:1; padding: 10px 14px; font-size: 15px; border: 1px solid var(--line);
+                     border-radius: 10px; outline: none; }
+  input[type=text]:focus { border-color: var(--acc); }
+  button { padding: 10px 18px; font-size: 15px; border: 1px solid var(--acc); background: var(--acc);
+           color:#fff; border-radius: 10px; cursor: pointer; }
+  button:disabled { opacity: .5; cursor: default; }
+  .chips { margin-top: 12px; display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip { font-size: 13px; padding: 4px 10px; border: 1px solid var(--line); border-radius: 999px;
+          color: var(--muted); cursor: pointer; background: none; }
+  .chip:hover { border-color: var(--acc); color: var(--acc); }
+  .card { margin-top: 22px; border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; }
+  .row { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; font-size: 12px; color: var(--muted); }
+  .tag { padding: 2px 8px; border-radius: 999px; background: #f3f4f6; }
+  .tag.strong { background:#ecfdf5; color:#047857; }
+  .tag.weak { background:#fffbeb; color:var(--warn); }
+  .tag.irrelevant { background:#fef2f2; color:#b91c1c; }
+  .ans { white-space: pre-wrap; }
+  .note { margin-top: 10px; font-size: 12px; color: var(--warn); }
+  .cites { margin-top: 14px; padding-top: 12px; border-top: 1px dashed var(--line); font-size: 13px; }
+  .cites div { color: var(--muted); margin: 4px 0; }
+  .cites b { color: var(--fg); font-weight: 500; }
+  .err { color:#b91c1c; margin-top: 16px; font-size: 14px; }
+  .fb { margin-top: 14px; padding-top: 10px; border-top: 1px dashed var(--line);
+        display: flex; gap: 6px; align-items: center; flex-wrap: wrap; font-size: 12px; color: var(--muted); }
+  .rid { font-family: ui-monospace, Menlo, monospace; color: #9ca3af; margin-right: 4px; }
+  .thanks { color: #047857; }
+</style>
+</head>
+<body>
+<div id="app" class="wrap">
+  <h1>转专业问答</h1>
+  <div class="sub">福州大学转专业知识库 · <span v-text="health.entries"></span> 条 · 通道 <span v-text="(health.channels||[]).join(' + ')"></span><span v-if="!health.llm"> · 未接模型，仅返回原文</span></div>
+
+  <div class="bar">
+    <input type="text" v-model="q" @keyup.enter="ask" placeholder="例如：我挂过科还能转专业吗">
+    <button @click="ask" :disabled="loading || !q.trim()">提问</button>
+  </div>
+
+  <div class="chips">
+    <button class="chip" v-for="s in samples" :key="s" @click="q=s; ask()" v-text="s"></button>
+  </div>
+
+  <div v-if="err" class="err" v-text="err"></div>
+
+  <div class="card" v-if="res">
+    <div class="row">
+      <span class="tag" :class="res.gate" v-text="label(res.gate)"></span>
+      <span v-text="res.mode"></span>
+      <span v-if="res.query" v-text="'· ' + res.query"></span>
+    </div>
+    <div class="ans" v-text="res.answer"></div>
+    <div class="note" v-if="res.note" v-text="res.note"></div>
+    <div class="note" v-for="c in res.caveats" :key="c" v-text="'注意：' + c"></div>
+
+    <div class="cites" v-if="res.citations && res.citations.length">
+      <div v-for="c in res.citations" :key="c.id">
+        <b v-text="c.label"></b> · <span v-text="c.section"></span> · <span v-text="c.id"></span>
+      </div>
+    </div>
+
+    <div class="cites" v-if="res.navigation && res.navigation.length">
+      没找到，可能你想问：
+      <div v-for="n in res.navigation" :key="n.id">· <span v-text="n.label"></span></div>
+    </div>
+
+    <div class="fb" v-if="res.request_id">
+      <span class="rid" v-text="'#' + res.request_id"></span>
+      <template v-if="!fbSent">
+        <button class="chip" @click="send('ok')">有用</button>
+        <button class="chip" @click="needReason = true" v-if="!needReason">没帮上</button>
+        <template v-if="needReason">
+          <button class="chip" v-for="r in reasons" :key="r.k" @click="send('bad', r.k)" v-text="r.n"></button>
+        </template>
+      </template>
+      <span class="thanks" v-else v-text="fbSent"></span>
+    </div>
+  </div>
+</div>
+
+<script>
+const { createApp } = Vue
+createApp({
+  data: () => ({
+    q: '', loading: false, err: '', res: null,
+    fbSent: '', needReason: false,
+    reasons: [
+      { k: 'wrong', n: '答错了' },
+      { k: 'missing', n: '没找到' },
+      { k: 'outdated', n: '过期了' },
+      { k: 'unclear', n: '太含糊' }
+    ],
+    health: { entries: 0, channels: [], llm: false },
+    samples: ['我挂过科还能转专业吗', '计算机类报录比多少', '补修有平时分吗', '宿舍要换吗', '今天天气怎么样']
+  }),
+  mounted() {
+    fetch('/api/health').then(r => r.json()).then(d => this.health = d).catch(() => {})
+    // 支持 /?q=xxx 直接提问，方便在群里贴一条能点开的链接
+    const q0 = new URLSearchParams(location.search).get('q')
+    if (q0) { this.q = q0; this.ask() }
+  },
+  methods: {
+    label(g) { return { strong: '强命中', weak: '弱命中', irrelevant: '未命中' }[g] || g },
+    async ask() {
+      const query = this.q.trim()
+      if (!query || this.loading) return
+      this.loading = true; this.err = ''; this.res = null
+      this.fbSent = ''; this.needReason = false
+      try {
+        const r = await fetch('/api/ask', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query, client: 'web' })
+        })
+        if (!r.ok) throw new Error('HTTP ' + r.status)
+        this.res = await r.json()
+      } catch (e) {
+        this.err = '请求失败：' + e.message
+      } finally {
+        this.loading = false
+      }
+    },
+    async send(verdict, reason) {
+      if (!this.res || this.fbSent) return
+      this.fbSent = '已记录，谢谢'
+      try {
+        await fetch('/api/feedback', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            request_id: this.res.request_id, verdict,
+            reason: reason || '', query: this.res.query, client: 'web'
+          })
+        })
+      } catch (e) {
+        this.fbSent = '没记上：' + e.message
+      }
+    }
+  }
+}).mount('#app')
+</script>
+</body>
+</html>
