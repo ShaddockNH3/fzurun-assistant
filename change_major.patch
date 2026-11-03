@@ -1,0 +1,394 @@
+From b0f4f63eb1b8bca33d2d962bcfb4abd341ee89bb Mon Sep 17 00:00:00 2001
+From: ShaddockNH3 <shaddock1122@163.com>
+Date: Wed, 4 Nov 2026 03:18:02 +0800
+Subject: [PATCH] =?UTF-8?q?feat(change=5Fmajor):=20=E6=8E=A5=E5=85=A5=20fz?=
+ =?UTF-8?q?urun-assistant=20=E9=97=AE=E7=AD=94=E6=8E=A5=E5=8F=A3?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ .env.example                    |   6 ++
+ README.md                       |   1 +
+ klee/__init__.py                |   1 +
+ klee/change_major/__init__.py   |  49 ++++++++++++++
+ klee/change_major/api.py        |  95 ++++++++++++++++++++++++++
+ klee/config.py                  |   5 ++
+ klee/markdown/keyboard.py       |  10 ++-
+ scripts/preview_change_major.py | 116 ++++++++++++++++++++++++++++++++
+ 8 files changed, 280 insertions(+), 3 deletions(-)
+ create mode 100644 klee/change_major/__init__.py
+ create mode 100644 klee/change_major/api.py
+ create mode 100755 scripts/preview_change_major.py
+
+diff --git a/.env.example b/.env.example
+index c14931d..d0c8e42 100644
+--- a/.env.example
++++ b/.env.example
+@@ -19,7 +19,13 @@ LOG_LEVEL=INFO
+ COMMAND_START=["/", "#"]
+ SUPERUSERS=[]
+ ANANSAID_GROUP_OPENID=[]
++# 转专业问答。留空则任何群都能用，填了只在该群响应
+ CHANGE_MAJOR_GROUP_OPENID=""
++# 对端是 fzurun-assistant
++CHANGE_MAJOR_API_BASE="http://127.0.0.1:8000"
++CHANGE_MAJOR_TIMEOUT=20
++# 原文跳转的站点前缀，留空就不出「查看原文」按钮
++CHANGE_MAJOR_SITE_URL=""
+ STU_ID_APPROVAL_GROUP_OPENID=[]
+ NOTICE_PUSH_GROUP_OPENID=[]
+ SB_DEER_GROUP_OPENID=[]
+diff --git a/README.md b/README.md
+index f2ba034..3038439 100644
+--- a/README.md
++++ b/README.md
+@@ -7,6 +7,7 @@
+ - 禁言
+ - 入群禁言
+ - 🦌
++- `/转专业 <问题>` 转专业问答，走 fzurun-assistant 的 HTTP 接口
+ 
+ ## 快速开始
+ 
+diff --git a/klee/__init__.py b/klee/__init__.py
+index f25c2fb..bc4a81c 100644
+--- a/klee/__init__.py
++++ b/klee/__init__.py
+@@ -29,6 +29,7 @@ logger.add(
+     diagnose=False,
+ )
+ 
++from . import change_major
+ from . import command
+ from . import notice_crawler
+ from . import event
+diff --git a/klee/change_major/__init__.py b/klee/change_major/__init__.py
+new file mode 100644
+index 0000000..3cf95a8
+--- /dev/null
++++ b/klee/change_major/__init__.py
+@@ -0,0 +1,49 @@
++"""转专业问答。
++
++QQ 官方机器人发送侧只有 msg_type 0/2/3/7（文本、markdown、ark、富媒体），
++没有合并转发，所以答案和出处必须一条消息说完。长答案按 ANSWER_LIMIT 截断，
++出处的完整位置靠底部按钮跳原文。
++
++数据来自 fzurun-assistant 的 /api/ask。
++"""
++
++from nonebot import logger, on_command
++from nonebot.adapters.qq import GroupMessageCreateEvent, Message, MessageSegment
++from nonebot.params import CommandArg
++
++from .. import config
++from ..markdown.keyboard import link_keyboard
++from ..util import describe_error
++from .api import build_reply, fetch_answer, source_url
++
++change_major = on_command("转专业", priority=20, block=True)
++
++
++@change_major.handle()
++async def _(event: GroupMessageCreateEvent, arg: Message = CommandArg()):  # noqa: B008
++    # 配了群就只在那个群响应，没配就哪儿都能用
++    if config.change_major_group_openid and event.group_openid != config.change_major_group_openid:
++        return
++
++    question = arg.extract_plain_text().strip()
++    if not question:
++        await change_major.finish("用法：/转专业 我挂过科还能转吗")
++
++    try:
++        data = await fetch_answer(
++            config.change_major_api_base,
++            question,
++            config.change_major_timeout,
++        )
++    except Exception as error:  # noqa: BLE001
++        logger.warning(f"转专业问答请求失败：{error!r}")
++        await change_major.finish(f"转专业助手暂时连不上。\n{describe_error(error)}")
++
++    reply = MessageSegment.markdown(build_reply(data))
++
++    top = next(iter(data.get("citations") or []), {})
++    url = source_url(config.change_major_site_url, top.get("anchor"))
++    if url:
++        reply += link_keyboard(url, "📖 查看原文")
++
++    await change_major.finish(reply)
+diff --git a/klee/change_major/api.py b/klee/change_major/api.py
+new file mode 100644
+index 0000000..7568f78
+--- /dev/null
++++ b/klee/change_major/api.py
+@@ -0,0 +1,95 @@
++"""转专业问答的 HTTP 客户端和消息拼装。
++
++这个文件不 import 包内任何东西，也不碰 nonebot，方便单独跑：
++
++    import importlib.util
++    spec = importlib.util.spec_from_file_location("cm", "klee/change_major/api.py")
++    mod = importlib.util.module_from_spec(spec)
++    spec.loader.exec_module(mod)
++
++对端是 fzurun-assistant：
++
++    POST /api/ask  {"query": "..."}
++    -> {"answer", "gate", "citations", "navigation", "note", "caveats",
++        "mode", "request_id", "latency_ms"}
++"""
++
++from __future__ import annotations
++
++import httpx
++
++# 一条消息塞多少字。QQ 的 markdown 上限比这宽，但太长了没人读，
++# 而且官方机器人没有合并转发，没法折叠。
++ANSWER_LIMIT = 800
++MAX_CITES = 3
++MAX_CAVEATS = 2
++
++
++def clip(text: str, limit: int = ANSWER_LIMIT) -> str:
++    text = (text or "").strip()
++    if len(text) <= limit:
++        return text
++    return text[:limit].rstrip() + "……"
++
++
++def source_url(site_base: str, anchor: str | None) -> str:
++    """拼原文链接。站点地址没配就返回空串，调用方据此决定要不要加按钮。"""
++    base = (site_base or "").strip().rstrip("/")
++    if not base or not anchor:
++        return ""
++    return f"{base}#{anchor}"
++
++
++def build_reply(data: dict) -> str:
++    """把 /api/ask 的返回拼成一条 markdown。纯函数，不依赖网络。"""
++    gate = data.get("gate") or ""
++    answer = (data.get("answer") or "").strip()
++
++    if gate == "irrelevant" or not answer:
++        lines = ["## 没查到", "", "知识库里没有和这个问题相关的内容。"]
++        labels = [i.get("label") for i in (data.get("navigation") or []) if i.get("label")]
++        if labels:
++            lines += ["", "可能是想问："]
++            lines += [f"- {label}" for label in labels[:3]]
++        return "\n".join(lines)
++
++    lines = ["## 转专业问答", "", clip(answer)]
++
++    note = (data.get("note") or "").strip()
++    if note:
++        lines += ["", f"> {note}"]
++
++    for caveat in (data.get("caveats") or [])[:MAX_CAVEATS]:
++        lines.append(f"> 注意：{caveat}")
++
++    cites: list[dict] = []
++    seen: set[str] = set()
++    for item in data.get("citations") or []:
++        key = item.get("id")
++        if not key or key in seen:
++            continue
++        seen.add(key)
++        cites.append(item)
++        if len(cites) >= MAX_CITES:
++            break
++
++    if cites:
++        lines += ["", "**出处**"]
++        for item in cites:
++            section = (item.get("section") or "").strip()
++            label = (item.get("label") or "").strip()
++            lines.append(f"- {section} · {label}" if section else f"- {label}")
++
++    if data.get("mode") == "llm":
++        lines += ["", "> 以上由模型从原文摘录，以原文为准。"]
++
++    return "\n".join(lines)
++
++
++async def fetch_answer(api_base: str, question: str, timeout: float) -> dict:
++    """调一次 /api/ask。异常交给调用方处理，这里只负责把 HTTP 细节收干净。"""
++    url = (api_base or "").strip().rstrip("/") + "/api/ask"
++    async with httpx.AsyncClient(timeout=timeout) as client:
++        resp = await client.post(url, json={"query": question, "client": "qqbot"})
++        resp.raise_for_status()
++        return resp.json()
+diff --git a/klee/config.py b/klee/config.py
+index 628ff84..f0c506b 100644
+--- a/klee/config.py
++++ b/klee/config.py
+@@ -21,6 +21,11 @@ class Config(BaseModel):
+     yzsxg_proxy: str = ""
+     # 访问统一登录 SSO 用的代理，留空直连
+     sso_proxy: str = ""
++    # 转专业问答：对端是 fzurun-assistant
++    change_major_api_base: str = "http://127.0.0.1:8000"
++    change_major_timeout: float = 20.0
++    # 原文跳转的站点前缀，留空就不生成「查看原文」按钮
++    change_major_site_url: str = ""
+     anan_llm_base_url: str = "http://localhost:11434/v1"
+     anan_llm_model: str = ""
+     anan_llm_api_key: str = ""
+diff --git a/klee/markdown/keyboard.py b/klee/markdown/keyboard.py
+index c25a53d..6d46860 100644
+--- a/klee/markdown/keyboard.py
++++ b/klee/markdown/keyboard.py
+@@ -10,7 +10,7 @@ from nonebot.adapters.qq.models import (
+ )
+ 
+ 
+-def notice_push_keyboard(url: str):
++def link_keyboard(url: str, label: str = "🔗 查看原文"):
+     return MessageSegment.keyboard(
+         MessageKeyboard(
+             content=InlineKeyboard(
+@@ -19,8 +19,8 @@ def notice_push_keyboard(url: str):
+                         buttons=[
+                             Button(
+                                 render_data=RenderData(
+-                                    label="🔗 查看原文",
+-                                    visited_label="🔗 查看原文",
++                                    label=label,
++                                    visited_label=label,
+                                     style=1,
+                                 ),
+                                 action=Action(
+@@ -35,3 +35,7 @@ def notice_push_keyboard(url: str):
+             )
+         )
+     )
++
++
++def notice_push_keyboard(url: str):
++    return link_keyboard(url)
+diff --git a/scripts/preview_change_major.py b/scripts/preview_change_major.py
+new file mode 100755
+index 0000000..2fee269
+--- /dev/null
++++ b/scripts/preview_change_major.py
+@@ -0,0 +1,116 @@
++#!/usr/bin/env python3
++"""不启动 bot，单独验证转专业问答模块。
++
++    uv run python scripts/preview_change_major.py
++    uv run python scripts/preview_change_major.py "我挂过科还能转专业吗"
++    uv run python scripts/preview_change_major.py --api http://127.0.0.1:8000
++
++两段：先用假数据走一遍拼装逻辑（覆盖拒答、截断、出处去重），
++再真发一次 HTTP 给 fzurun-assistant，把会发出去的 markdown 打印出来。
++"""
++
++from __future__ import annotations
++
++import argparse
++import asyncio
++import importlib.util
++import sys
++from pathlib import Path
++
++ROOT = Path(__file__).resolve().parents[1]
++SPEC = importlib.util.spec_from_file_location(
++    "cm_api", ROOT / "klee" / "change_major" / "api.py"
++)
++if SPEC is None or SPEC.loader is None:
++    raise SystemExit("找不到 klee/change_major/api.py")
++api = importlib.util.module_from_spec(SPEC)
++SPEC.loader.exec_module(api)
++
++SITE = "https://example.com/posts/FZU/overview/"
++
++FAKE_OK = {
++    "answer": "可以。福州大学不限制挂过科的转专业，唯一需要注意的是面试时老师会问你为什么挂。",
++    "mode": "llm",
++    "gate": "strong",
++    "citations": [
++        {"id": "1.2.q7", "section": "1.2 我能不能转", "label": "我挂过科，大二还能转专业吗？",
++         "anchor": "q7我挂过科大二还能转专业吗"},
++        {"id": "1.2.q7", "section": "1.2 我能不能转", "label": "重复的引用应该被去掉",
++         "anchor": "x"},
++        {"id": "2.4.q1", "section": "2.4 笔试与面试", "label": "面试重要吗", "anchor": "y"},
++    ],
++    "navigation": [],
++    "caveats": ["文档未说明各学院对挂科门数是否有内部限制"],
++    "note": "",
++}
++
++FAKE_MISS = {
++    "answer": "文档里没有找到和这个问题相关的内容。",
++    "mode": "retrieval_only",
++    "gate": "irrelevant",
++    "citations": [],
++    "navigation": [
++        {"id": "ref.1.4.ratio", "label": "25 年大一转专业报录比（经验值）"},
++        {"id": "1.2.q6", "label": "我是 24 级的地质工程专业，可以转专业吗？"},
++    ],
++    "caveats": [],
++    "note": "",
++}
++
++FAKE_LONG = {
++    "answer": "长" * 1200,
++    "mode": "retrieval_only",
++    "gate": "strong",
++    "citations": [{"id": "ref.1.4.ratio", "section": "1.4 竞争有多激烈",
++                   "label": "25 年大一转专业报录比（经验值）", "anchor": "ratio"}],
++    "navigation": [], "caveats": [], "note": "以下为非官方经验值，仅供参照。",
++}
++
++
++def show(title: str, data: dict) -> None:
++    text = api.build_reply(data)
++    top = next(iter(data.get("citations") or []), {})
++    url = api.source_url(SITE, top.get("anchor"))
++    print(f"\n{'=' * 60}\n{title}　（{len(text)} 字）\n{'=' * 60}")
++    print(text)
++    print(f"\n[按钮] {'📖 查看原文 -> ' + url if url else '无（没配站点地址或没有锚点）'}")
++
++
++async def real(api_base: str, question: str) -> int:
++    print(f"\n{'=' * 60}\n真实请求　{question}\n{'=' * 60}")
++    try:
++        data = await api.fetch_answer(api_base, question, 30.0)
++    except Exception as error:  # noqa: BLE001
++        print(f"失败：{error!r}")
++        return 1
++
++    text = api.build_reply(data)
++    print(f"gate={data.get('gate')}  mode={data.get('mode')}  "
++          f"latency={data.get('latency_ms')}ms  request_id={data.get('request_id')}")
++    print(f"消息长度 {len(text)} 字\n")
++    print(text)
++
++    top = next(iter(data.get("citations") or []), {})
++    url = api.source_url(SITE, top.get("anchor"))
++    print(f"\n[按钮] {'📖 查看原文 -> ' + url if url else '无'}")
++    return 0
++
++
++def main() -> int:
++    ap = argparse.ArgumentParser()
++    ap.add_argument("question", nargs="?", default="我挂过科还能转专业吗")
++    ap.add_argument("--api", default="http://127.0.0.1:8000")
++    ap.add_argument("--offline", action="store_true", help="只跑假数据，不发请求")
++    args = ap.parse_args()
++
++    show("正常命中", FAKE_OK)
++    show("拒答", FAKE_MISS)
++    show("超长答案（应截断）", FAKE_LONG)
++
++    if args.offline:
++        return 0
++    return asyncio.run(real(args.api, args.question))
++
++
++if __name__ == "__main__":
++    sys.exit(main())
+-- 
+2.50.1 (Apple Git-155)
+
