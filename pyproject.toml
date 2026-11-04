@@ -3,6 +3,8 @@ name = "fzurun-assistant"
 version = "0.1.0"
 description = "福州大学转专业知识问答助手（HTTP API + 简易前端）"
 readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.12.3"
 dependencies = [
     "blacksheep>=2.4",

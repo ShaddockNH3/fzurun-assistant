@@ -93,3 +93,7 @@ npx --yes markdownlint-cli2 README.md
 ## 致谢
 
 知识库来自 [福州大学转专业文档](https://docs.qq.com/doc/DQ2p3cmdkem9GbEV5) 上那份集体维护的转专业文档。RRF 的融合思路来自 [fzu-assistant](https://github.com/ShaddockNH3/fzu-assistant)。
+
+## License
+
+代码以 [MIT](LICENSE) 授权。`data/kb/` 下的知识库正文派生自上面那份集体维护的文档，版权归原维护者，不在 MIT 覆盖范围内。
