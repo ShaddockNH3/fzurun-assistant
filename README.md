@@ -1,6 +1,6 @@
 # fzurun-assistant
 
-福州大学转专业问答。后端采用 BlackSheep，前端采用 Vue 3 单页，对外只有 HTTP 接口，方便接 QQ bot。
+福州大学转专业问答服务。BlackSheep 后端，单页前端，对外只有 HTTP 接口。
 
 ![结构](./assets/architecture.svg)
 
@@ -9,18 +9,19 @@
 需要 Python 3.12 和 [uv](https://github.com/astral-sh/uv)。
 
 ```bash
-uv sync                                   # 装依赖
-cp .env.example .env                      # 不配 key 也能跑
+uv sync
+cp .env.example .env
 uv run uvicorn fzurun.api.app:app --port 8000
 ```
 
-打开 <http://127.0.0.1:8000>。不配任何 key 时只有 BM25 检索，直接返回知识库原文和出处。
+打开 <http://127.0.0.1:8000>。不配任何 key 也能用：只有 BM25 检索，直接返回知识库原文和出处。
 
 ## 接口
 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
 | GET | `/api/health` | 条目数、启用的通道、模型是否就绪 |
+| GET | `/api/stats` | 按类型和档位统计条目数 |
 | GET | `/api/search?q=&k=` | 只检索，返回命中列表和门控结果 |
 | POST | `/api/ask` | `{"query": "..."}`，返回答案和引用 |
 | POST | `/api/feedback` | `{"request_id": "...", "verdict": "bad", "reason": "wrong"}` |
@@ -35,6 +36,7 @@ uv run uvicorn fzurun.api.app:app --port 8000
 | `gate` | `strong` 可作结论，`weak` 只作参考，`irrelevant` 拒答 |
 | `citations` | 引用的条目，含 `id`、`label`、`anchor`、`tier` |
 | `navigation` | 拒答时给的三条相近问题 |
+| `caveats` | 条目自带的前提说明，比如「非官方经验值」 |
 | `request_id` | 反馈时带回来，能对上这次问答 |
 | `latency_ms` | 端到端耗时 |
 
@@ -51,7 +53,9 @@ uv run uvicorn fzurun.api.app:app --port 8000
 | `FZURUN_EMBED_BASE_URL` 等 | 空 | 配了才启用向量通道 |
 | `FZURUN_TOP_K` | 5 | 返回多少条候选 |
 | `FZURUN_RRF_K` | 60 | 融合参数，一般不用动 |
+| `FZURUN_GATE_*` | 见 docs | 四个门控阈值，按 99 条语料标定，语料大改后要重标 |
 | `FZURUN_LOG_ENABLED` | true | 写 JSONL 日志到 `data/logs/` |
+| `FZURUN_LOG_QUERY` | true | 关掉只记门控和命中，不留问题原文 |
 
 智谱的 Flash 系列默认开思考，会和答案抢 token，`EXTRA_BODY` 那行必须填。用 vllm、Ollama、Groq 时删掉。
 
@@ -59,29 +63,25 @@ uv run uvicorn fzurun.api.app:app --port 8000
 
 `data/kb/qa.json` 从 Firefly 那份转专业文档派生，99 条。
 
-改完文档重新生成：
-
 ```bash
 uv run python scripts/build_kb.py            # 覆盖 data/kb/qa.json
 uv run python scripts/build_kb.py --dry-run  # 只看报告
 ```
 
-人工字段（`tier`、`caveats`、`related`）会保留，删掉的条目标成 `removed`，id 不回收。
-
-同义问法在 `data/kb/alt.json`，手写。
+人工字段（`tier`、`caveats`、`related`）会保留，删掉的条目标成 `removed`，id 不回收。同义问法在 `data/kb/alt.json`，手写，目前 14 组。
 
 ## 设计取舍
 
 ![推进过程中的五个问题](./assets/problems.svg)
 
-为什么是单路 BM25、为什么不做真流式、为什么门控不用模型自评，见 [docs/DESIGN.md](docs/DESIGN.md)。试运行的数据怎么收、怎么看，也在那里。
+为什么是单路 BM25、为什么不做真流式、为什么门控不用模型自评，见 [docs/DESIGN.md](docs/DESIGN.md)。试运行数据怎么收、怎么看，也在那里。
 
 ## 测试
 
 ```bash
 uv run pytest -q
 uv run ruff check src scripts tests
-npx --yes markdownlint-cli2 README.md
+npx --yes markdownlint-cli2 README.md docs/*.md
 ```
 
 ## 已知问题
